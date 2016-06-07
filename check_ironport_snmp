@@ -43,6 +43,7 @@ Types:
     diskio*              -> Percent Disk I/O Utilization
     queue*               -> Percent Queue Utilization
     queueavail           -> Queue Availability Status
+    workqueue*           -> Work Queue Messages
     resourceconservation -> Resource Conservation Reason
     temperature*         -> Device Temperature (in °C)
     raid                 -> RAID Status
@@ -119,7 +120,7 @@ esac
 
 # Perform sanity check on thresholds
 case "${TYPE}" in
-cpu|mem|diskio|queue|temperature|fan|openfiles|mailtransferthreads|dns)
+cpu|mem|diskio|queue|workqueue|temperature|fan|openfiles|mailtransferthreads|dns)
     if [ -z ${WARN_THRESHOLD} ]; then
         echo "Warning threshold missing. Please use -w to provide a value for warning threshold."
         exit ${STATE_UNKNOWN}
@@ -253,6 +254,27 @@ queueavail)
     SERVICE_OUTPUT="Queue availability ${STATE_STRING[${EXIT_STATUS}]} - ${status}"
 
     echo "${SERVICE_OUTPUT}"
+    exit ${EXIT_STATUS}
+;;
+workqueue)
+    # ASYNCOS-MAIL-MIB::perCentQueueUtilization.0
+    if ! queue=$($SNMPGET .1.3.6.1.4.1.15497.1.1.1.11.0 2>&1); then
+        echo "Queue size: $queue"
+        exit ${STATE_UNKNOWN}
+    fi
+
+    if [ ${queue} -gt ${CRIT_THRESHOLD} ]; then
+        EXIT_STATUS=${STATE_CRITICAL}
+    elif [ ${queue} -gt ${WARN_THRESHOLD} ]; then
+        EXIT_STATUS=${STATE_WARNING}
+    else
+        EXIT_STATUS=${STATE_OK}
+    fi
+
+    SERVICE_OUTPUT="Queue size ${STATE_STRING[${EXIT_STATUS}]} - ${queue}"
+    PERF_DATA="'Queue size'=${queue};${WARN_THRESHOLD};${CRIT_THRESHOLD}"
+
+    echo "${SERVICE_OUTPUT} | ${PERF_DATA}"
     exit ${EXIT_STATUS}
 ;;
 resourceconservation)
